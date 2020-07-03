@@ -16,15 +16,20 @@ class WeatherService {
     let apiKey = "92cabe9523da26194b02974bfcd50b7e"
     
     
-    func saveWeatherData(_ weathers: [Weather]) {
+    func saveWeatherData(_ weathers: [Weather], city: String) {
         
         do {
-            let realm = try! Realm()
+            let realm = try Realm()
+            
+            let oldWeathers = realm.objects(Weather.self).filter("city == %@", city)
             
             realm.beginWrite()
+            realm.delete(oldWeathers)
             realm.add(weathers)
             
-            try? realm.commitWrite()
+            try realm.commitWrite()
+        } catch {
+            print(error)
         }
     }
     
@@ -39,12 +44,14 @@ class WeatherService {
         
         let url = baseUrl + path
             
-        AF.request(url, method: .get, parameters: parameters).responseData { response in
+        AF.request(url, method: .get, parameters: parameters).responseData { [weak self] response in
             guard let data = response.value else { return }
 
             let weather = try! JSONDecoder().decode(WeatherResponse.self, from: data).list
             
-            self.saveWeatherData(weather)
+            weather.forEach { $0.city = city }
+            
+            self?.saveWeatherData(weather, city: city)
 
             comletion(weather)
         }

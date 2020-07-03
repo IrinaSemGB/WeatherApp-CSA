@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import RealmSwift
 
 class ViewController: UIViewController {
     
@@ -25,8 +26,19 @@ class ViewController: UIViewController {
         super.viewDidLoad()
         
         self.weatherService.loadWeatherData(city: "Moscow") { [weak self] weathers in
-            self?.weathers = weathers
+            self?.loadData()
             self?.collectionView?.reloadData()
+        }
+    }
+    
+    func loadData() {
+        
+        do {
+            let realm = try Realm()
+            let weathers = realm.objects(Weather.self).filter("city == %@", "Moscow")
+            self.weathers = Array(weathers)
+        } catch {
+            print(error)
         }
     }
 }
