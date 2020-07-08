@@ -9,6 +9,8 @@
 import Foundation
 import Alamofire
 import RealmSwift
+import SwiftyJSON
+
 
 class WeatherService {
     
@@ -16,25 +18,8 @@ class WeatherService {
     let apiKey = "92cabe9523da26194b02974bfcd50b7e"
     
     
-    func saveWeatherData(_ weathers: [Weather], city: String) {
+    func loadWeatherData(city: String) {
         
-        do {
-            let realm = try Realm()
-            
-            let oldWeathers = realm.objects(Weather.self).filter("city == %@", city)
-            
-            realm.beginWrite()
-            realm.delete(oldWeathers)
-            realm.add(weathers)
-            
-            try realm.commitWrite()
-        } catch {
-            print(error)
-        }
-    }
-    
-    
-    func loadWeatherData(city: String, comletion: @escaping ([Weather]) -> Void) {
         let path = "/data/2.5/forecast"
         let parameters: Parameters = [
             "q": city,
@@ -44,17 +29,37 @@ class WeatherService {
         
         let url = baseUrl + path
             
-        AF.request(url, method: .get, parameters: parameters).responseData { [weak self] response in
-            guard let data = response.value else { return }
-
-            let weather = try! JSONDecoder().decode(WeatherResponse.self, from: data).list
+        AF.request(url, method: .get, parameters: parameters).responseJSON { response in
             
-            weather.forEach { $0.city = city }
-            
-            self?.saveWeatherData(weather, city: city)
-
-            comletion(weather)
+            switch response.result {
+                
+            case .success(let value):
+                let json = JSON(value)
+                let weather = json["list"].arrayValue.map { Weather(json: $0) }
+                weather.forEach { $0.city = city }
+                self.saveWeatherData(weather, city: city)
+                
+            case .failure(let error):
+                print(error)
+            }
+        }
+    }
+    
+    
+    func saveWeatherData(_ weathers: [Weather], city: String) {
+        
+        do {
+        
+            let realm = try Realm()
+            guard let city = realm.object(ofType: City.self, forPrimaryKey: city) else { return }
+            let oldWeathers = city.weathers
+            realm.beginWrite()
+            realm.delete(oldWeathers)
+            city.weathers.append(objectsIn: weathers)
+            try realm.commitWrite()
+        } catch {
+            print(error)
         }
     }
 }
-// http://api.openweathermap.org/data/2.5/forecast?q=Moscow&units=metric&appid=92cabe9523da26194b02974bfcd50b7e
+
