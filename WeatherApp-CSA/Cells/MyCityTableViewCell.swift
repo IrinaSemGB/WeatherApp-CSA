@@ -10,7 +10,7 @@ import UIKit
 
 class MyCityTableViewCell: UITableViewCell {
 
-    @IBOutlet weak var myCityNameLabel: UILabel? {
+    @IBOutlet private(set) weak var myCityNameLabel: UILabel? {
         didSet {
             myCityNameLabel?.textColor = .white
             myCityNameLabel?.font = UIFont(name: "Helvetica-Bold", size: 22)
@@ -18,8 +18,7 @@ class MyCityTableViewCell: UITableViewCell {
     }
 
     
-    func setWeatherInMyCity(city: City) {
-        
+    public func setWeatherInMyCity(city: FirebaseCity) {
         self.myCityNameLabel?.text = city.name
     }
 }

@@ -7,107 +7,90 @@
 //
 
 import UIKit
-import RealmSwift
+import FirebaseAuth
+import FirebaseDatabase
+import FirebaseFirestore
+
 
 class MyCityTableViewController: UITableViewController {
-
     
-    var cities: Results<City>?
-    var token: NotificationToken?
     
+    var cities = [FirebaseCity]()
+    private let reference = Database.database().reference(withPath: "cities")
+    private let db = Firestore.firestore()
+    
+    
+    // MARK: - Life Cycle
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        self.title = "To add a new city ⇨"
         self.setBackGroundImage()
-
-        self.pairTableAndRealm()
+        
+        self.reference.observe(.value) { snapshot in
+            var cities: [FirebaseCity] = []
+            
+            for child in snapshot.children {
+                if let snapshot = child as? DataSnapshot,
+                    let city = FirebaseCity(snapshot: snapshot) {
+                    cities.append(city)
+                }
+            }
+            self.cities = cities
+            self.tableView.reloadData()
+        }
     }
     
-    func setBackGroundImage() {
+    
+    // MARK: - setBackGroundImage
+    
+    private func setBackGroundImage() {
         
         let backgroundImage = UIImageView(image: UIImage(named: "bg3"))
         self.tableView.backgroundView = backgroundImage
         backgroundImage.contentMode = .scaleAspectFill
     }
-
-
-    func pairTableAndRealm() {
-        
-        guard let realm = try? Realm() else { return }
-        self.cities = realm.objects(City.self)
-        self.token = cities?.observe { [weak self] (changes: RealmCollectionChange) in
-            guard let tableView = self?.tableView else { return }
-            
-            switch changes {
-            case .initial:
-                tableView.reloadData()
-            case .update(_, let deletions, let insertions, let modifications):
-                tableView.beginUpdates()
-                tableView.insertRows(at: insertions.map({ IndexPath(row: $0, section: 0) }), with: .automatic)
-                tableView.deleteRows(at: deletions.map({ IndexPath(row: $0, section: 0) }), with: .automatic)
-                tableView.reloadRows(at: modifications.map({ IndexPath(row: $0, section: 0) }), with: .automatic)
-                tableView.endUpdates()
-            case .error(let error):
-                print("fatalError \(error)")
-            }
-        }
-    }
     
+    
+    // MARK: - Actions
     
     @IBAction func addButtonPressed(_ sender: Any) {
-        showAddCityForm()
-    }
-    
-    
-    
-    
-    func showAddCityForm() {
         
-        let alertController = UIAlertController(title: "Введите название города (англ.)", message: nil, preferredStyle: .alert)
-        alertController.addTextField(configurationHandler: {(_ textField: UITextField) -> Void in
-        })
+        let alert = UIAlertController(title: "To add new city", message: "Please enter a city name (in English 🇬🇧)", preferredStyle: .alert)
         
-        let conformAction = UIAlertAction(title: "Добавить", style: .default) { [weak self] action in
-            guard let name = alertController.textFields?[0].text else { return }
-            self?.addCity(name: name)
+        let saveAction = UIAlertAction(title: "Save", style: .default) { _ in
+            
+            guard let textField = alert.textFields?.first,
+                let cityName = textField.text else { return }
+            
+            let city = FirebaseCity(name: cityName, zipcode: Int.random(in: 100000...999999))
+            let cityReference = self.reference.child(cityName.lowercased())
+            cityReference.setValue(city.toAnyObject())
         }
-        alertController.addAction(conformAction)
         
-        let cancelAction = UIAlertAction(title: "Отмена", style: .cancel, handler: nil)
-        alertController.addAction(cancelAction)
+        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel)
         
-        self.present(alertController, animated: true, completion: nil)
-    }
-    
-    func addCity(name: String) {
-        let newCity = City()
-        newCity.name = name
+        alert.addTextField()
         
-        do {
-            let realm = try Realm()
-            realm.beginWrite()
-            realm.add(newCity, update: .all)
-            try realm.commitWrite()
-        } catch {
-            print(error)
-        }
+        alert.addAction(saveAction)
+        alert.addAction(cancelAction)
+        
+        present(alert, animated: true, completion: nil)
     }
     
     
     // MARK: - Table view data source
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return self.cities?.count ?? 0
+        return self.cities.count
     }
 
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "MyCityTableViewCell", for: indexPath) as! MyCityTableViewCell
+        guard let cell = tableView.dequeueReusableCell(withIdentifier: "MyCityTableViewCell", for: indexPath) as? MyCityTableViewCell else { return UITableViewCell() }
 
-        let city = self.cities?[indexPath.row]
-        cell.setWeatherInMyCity(city: city!)
+        let city = self.cities[indexPath.row]
+        cell.myCityNameLabel?.text = city.name
         cell.backgroundColor = .clear
 
         return cell
@@ -116,20 +99,24 @@ class MyCityTableViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
         
-        let city = self.cities?[indexPath.row]
-        
         if editingStyle == .delete {
-            do {
-                let realm = try Realm()
-                realm.beginWrite()
-                realm.delete(city!.weathers)
-                realm.delete(city!)
-                try realm.commitWrite()
-            } catch {
-                print(error)
+            let city = cities[indexPath.row]
+            city.reference?.removeValue()
+            
+            db.collection("forecasts").document(city.name).delete() { err in
+                if let err = err {
+                    print("Error removing document: \(err)")
+                } else {
+                    print("Document successfully removed!")
+                }
             }
         }
     }
+    
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+    }
+
 
     
     // MARK: - Navigation
@@ -141,7 +128,7 @@ class MyCityTableViewController: UITableViewController {
             
             if let indexPath = tableView.indexPath(for: cell) {
                 
-                destination.cityName = cities?[indexPath.row].name as! String
+                destination.cityName = self.cities[indexPath.row].name
             }
         }
     }

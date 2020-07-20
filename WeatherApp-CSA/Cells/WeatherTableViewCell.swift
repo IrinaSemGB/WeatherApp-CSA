@@ -10,48 +10,59 @@ import UIKit
 
 class WeatherTableViewCell: UITableViewCell {
 
-    @IBOutlet weak var dayLabel: UILabel?
-    @IBOutlet weak var weatherImage: UIImageView? {
+    @IBOutlet private weak var descriptionLabel: UILabel? {
+        didSet {
+            descriptionLabel?.font = UIFont(name: "Helvetica-Bold", size: 18)
+            descriptionLabel?.textColor = .white
+        }
+    }
+    
+    @IBOutlet private weak var weatherImage: UIImageView? {
         didSet {
             weatherImage?.contentMode = .scaleAspectFit
         }
     }
-    @IBOutlet weak var temperatureMaxLabel: UILabel? {
+    @IBOutlet private weak var temperatureMaxLabel: UILabel? {
         didSet {
             temperatureMaxLabel?.textAlignment = .center
+            temperatureMaxLabel?.font = UIFont(name: "Helvetica-Bold", size: 22)
+            temperatureMaxLabel?.textColor = .white
+            temperatureMaxLabel?.shadowColor = .gray
         }
     }
-    @IBOutlet weak var temperatureMinLabel: UILabel? {
+    @IBOutlet private weak var temperatureMinLabel: UILabel? {
         didSet {
             temperatureMinLabel?.textAlignment = .center
+            temperatureMinLabel?.font = UIFont(name: "Helvetica-Bold", size: 22)
+            temperatureMinLabel?.textColor = .lightText
+            temperatureMinLabel?.shadowColor = .gray
         }
     }
     
-//    static let dateFormatter: DateFormatter = {
-//        let df = DateFormatter()
-//        df.dateFormat = "dd.MM.yyyy HH.mm"
-//        return df
-//    }()
     
-    
-    func setWeather(weather: Weather) {
+    public func setWeather(forecast: [String : Any]) {
         
-//        let date = Date(timeIntervalSince1970: weather.date)
-//        let stringDate = WeatherTableViewCell.dateFormatter.string(from: date)
-        
-        self.dayLabel?.text = getDayForDate(Date(timeIntervalSince1970: Double(weather.date)))
-        self.weatherImage?.image = UIImage(named: "\(weather.weatherName)")
-        self.temperatureMaxLabel?.text = "\(Int(weather.tempMax))°"
-        self.temperatureMinLabel?.text = "\(Int(weather.tempMin))°"
-    }
-    
-    func getDayForDate(_ date: Date?) -> String {
-        guard let inputDate = date else {
-            return ""
+        var description = String()
+        if let weatherName = forecast["weatherName"] {
+            description = "\(weatherName)"
         }
+        self.descriptionLabel?.text = "It's \(description)"
+        self.weatherImage?.image = UIImage(named: description)
         
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, HH:mm"
-        return formatter.string(from: inputDate)
+        var tempMaxText = String()
+        var tempMinText = String()
+        var tempMaxValue = Double()
+        var tempMinValue = Double()
+        
+        if let tempMax = forecast["tempMax"], let tempMin = forecast["tempMin"] {
+            
+            tempMaxValue = tempMax as! Double
+            tempMinValue = tempMin as! Double
+            
+            tempMaxText = String(format: "%0.f", tempMaxValue) + "°"
+            tempMinText = String(format: "%0.f", tempMinValue) + "°"
+        }
+        self.temperatureMaxLabel?.text = tempMaxText
+        self.temperatureMinLabel?.text = tempMinText
     }
 }

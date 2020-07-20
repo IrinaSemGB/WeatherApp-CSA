@@ -8,17 +8,17 @@
 
 import Foundation
 import Alamofire
-import RealmSwift
 import SwiftyJSON
+import FirebaseFirestore
 
 
 class WeatherService {
     
-    let baseUrl = "http://api.openweathermap.org"
-    let apiKey = "92cabe9523da26194b02974bfcd50b7e"
+    private let baseUrl = "http://api.openweathermap.org"
+    private let apiKey = "92cabe9523da26194b02974bfcd50b7e"
     
     
-    func loadWeatherData(city: String) {
+    public func loadWeatherData(city: String) {
         
         let path = "/data/2.5/forecast"
         let parameters: Parameters = [
@@ -37,7 +37,7 @@ class WeatherService {
                 let json = JSON(value)
                 let weather = json["list"].arrayValue.map { Weather(json: $0) }
                 weather.forEach { $0.city = city }
-                self.saveWeatherData(weather, city: city)
+                self.saveToFirestore(weather, city: city)
                 
             case .failure(let error):
                 print(error)
@@ -46,19 +46,18 @@ class WeatherService {
     }
     
     
-    func saveWeatherData(_ weathers: [Weather], city: String) {
+    private func saveToFirestore(_ weathers: [Weather], city: String) {
         
-        do {
+        let database = Firestore.firestore()
         
-            let realm = try Realm()
-            guard let city = realm.object(ofType: City.self, forPrimaryKey: city) else { return }
-            let oldWeathers = city.weathers
-            realm.beginWrite()
-            realm.delete(oldWeathers)
-            city.weathers.append(objectsIn: weathers)
-            try realm.commitWrite()
-        } catch {
-            print(error)
+        let weathersToSend = weathers
+            .map { $0.toFirestore() }
+            .reduce([:]) { $0.merging($1) { (current, _) in current } }
+        
+        database.collection("forecasts").document(city).setData(weathersToSend, merge: true) { error in
+        if let error = error {
+            print(error.localizedDescription)
+            } else { print("data saved")}
         }
     }
 }
